@@ -1,0 +1,4 @@
+- everything is a syntax tree and everything has its own info on it,
+once you cast it becomes easier to query and work through
+
+- you have to cast your types 
