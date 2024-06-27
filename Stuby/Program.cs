@@ -80,9 +80,9 @@ var apiControllers = classDef.Where(cd =>
 var classDeclarationSyntaxes = apiControllers.ToList();
 
 //getting class and the models
-var classSyntax = classDeclarationSyntaxes.First();
-var model = comp.GetSemanticModel(classSyntax.SyntaxTree);
-var myClass = model.GetDeclaredSymbol(classSyntax);
+ClassDeclarationSyntax classSyntax = classDeclarationSyntaxes.First();
+SemanticModel model = comp.GetSemanticModel(classSyntax.SyntaxTree);
+INamedTypeSymbol? myClass = model.GetDeclaredSymbol(classSyntax);
 
 //getting the endpoint
 var routeAttrib = myClass!.GetAttributes().First(a => a.AttributeClass!.Name ==nameof(RouteAttribute));
@@ -118,17 +118,56 @@ else if(returnType is INamedTypeSymbol type)
 if (returnType != null)
 {
     Console.WriteLine($"returns {returnType.Name}");
-    IEnumerable<(ITypeSymbol ReturnType, string Name)> types = responseType!
+    IEnumerable<(string ReturnType, string Name)> types = responseType!
         .GetMembers()
         .OfType<IPropertySymbol>()
         .Where(p => p.GetMethod != null)
-        .Select(p => (p.GetMethod!.ReturnType, p.Name));
+        .Select(p => (p.GetMethod!.ReturnType.Name, p.Name));
     foreach (var valueTuple in types)
     {
        Console.WriteLine(valueTuple.ToString()); 
     }
 }
 Console.WriteLine("hi");
+
+class ClassState
+{
+    private ClassDeclarationSyntax _Syntax;
+    private SemanticModel _Model;
+    private INamespaceSymbol _Declaratation;
+
+    public string ControllerName;
+    public string RouteName;
+
+    void GetRouteName()
+    {
+        //TODO make a strat for this
+        var routeAttrib = _Declaratation.GetAttributes().First(a => a.AttributeClass!.Name ==nameof(RouteAttribute));
+        var routeName = (string)routeAttrib.ConstructorArguments.First().Value!;
+        RouteName = routeName.Replace("[controller]",
+            _Declaratation.Name.Replace("Controller", "", 
+                StringComparison.OrdinalIgnoreCase));
+    }
+}
+
+class MethodState
+{
+    private INamespaceSymbol _Declaratation;
+
+    private readonly string[] _attributeNames =
+    [
+        nameof(HttpGetAttribute), nameof(HttpPostAttribute), nameof(HttpPutAttribute), nameof(HttpDeleteAttribute)
+    ];
+
+    private IEnumerable<IMethodSymbol> Methods;
+    void GetMethods()
+    {
+        Methods = _Declaratation.GetMembers().OfType<IMethodSymbol>()
+            .Where(m => m.GetAttributes()
+                .Any(a => _attributeNames.Contains(a.AttributeClass?.Name) ));
+ 
+    }
+}
 
 public class ProgressBarProjectLoadStatus : IProgress<ProjectLoadProgress>
 {
@@ -137,3 +176,26 @@ public class ProgressBarProjectLoadStatus : IProgress<ProjectLoadProgress>
        Console.Out.WriteLine($"{value.Operation} {value.FilePath}");
     }
 }
+
+//represents the type data that we care about
+public struct TypeData(string PropertyName, string TypeName);
+public class Endpoint
+{
+    public Endpoint(string raw)
+    {
+        Raw = raw;
+        Args = new Dictionary<string, TypeData?>();
+        //TODO fill with all {param}
+    }
+
+    public void SetTypeInfo(string name,ITypeSymbol type)
+    {
+        if (Args.ContainsKey(name))
+        {
+            Args[name] = new TypeData(name,type.Name);
+        }
+    }
+
+    public readonly string Raw; 
+    public Dictionary<string,TypeData?> Args { get; }
+};
